@@ -1,0 +1,91 @@
+{
+  "version": 1,
+  "author": "Capivara-inator 20000",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "board-esp32-devkit-c-v4", "id": "esp", "top": 0, "left": 0, "attrs": { "builder": "esp-idf" } },
+
+    { "type": "wokwi-hc-sr04", "id": "sonarF", "top": -300, "left": -360, "attrs": { "distance": "150" } },
+    { "type": "wokwi-hc-sr04", "id": "sonarT", "top": -160, "left": -360, "attrs": { "distance": "150" } },
+
+    { "type": "wokwi-photoresistor-sensor", "id": "ldrF", "top": -20, "left": -360, "attrs": {} },
+    { "type": "wokwi-photoresistor-sensor", "id": "ldrT", "top":  95, "left": -360, "attrs": {} },
+
+    { "type": "wokwi-pushbutton", "id": "btn", "top": 230, "left": -330, "attrs": { "color": "green", "label": "START" } },
+
+    { "type": "wokwi-led", "id": "mEF", "top": -310, "left": 440, "attrs": { "color": "green", "label": "M-ESQ-F (33)" } },
+    { "type": "wokwi-led", "id": "mET", "top": -250, "left": 440, "attrs": { "color": "red",   "label": "M-ESQ-T" } },
+    { "type": "wokwi-led", "id": "mDF", "top": -190, "left": 440, "attrs": { "color": "green", "label": "M-DIR-F" } },
+    { "type": "wokwi-led", "id": "mDT", "top": -130, "left": 440, "attrs": { "color": "red",   "label": "M-DIR-T" } },
+
+    { "type": "wokwi-led", "id": "lF", "top": -40, "left": 440, "attrs": { "color": "yellow", "label": "FRENTE" } },
+    { "type": "wokwi-led", "id": "lT", "top":  20, "left": 440, "attrs": { "color": "yellow", "label": "TRAS" } },
+    { "type": "wokwi-led", "id": "lD", "top":  80, "left": 440, "attrs": { "color": "white",  "label": "DIREITA" } },
+    { "type": "wokwi-led", "id": "lE", "top": 140, "left": 440, "attrs": { "color": "white",  "label": "ESQUERDA" } },
+
+    { "type": "wokwi-led", "id": "dV", "top": 230, "left": 440, "attrs": { "color": "red",    "label": "<10cm" } },
+    { "type": "wokwi-led", "id": "dA", "top": 290, "left": 440, "attrs": { "color": "blue",   "label": "10-30 / 60-90" } },
+    { "type": "wokwi-led", "id": "dL", "top": 350, "left": 440, "attrs": { "color": "orange", "label": "30-60cm" } },
+
+    { "type": "wokwi-resistor", "id": "r1",  "top": -295, "left": 320, "attrs": { "value": "220" } },
+    { "type": "wokwi-resistor", "id": "r2",  "top": -235, "left": 320, "attrs": { "value": "220" } },
+    { "type": "wokwi-resistor", "id": "r3",  "top": -175, "left": 320, "attrs": { "value": "220" } },
+    { "type": "wokwi-resistor", "id": "r4",  "top": -115, "left": 320, "attrs": { "value": "220" } },
+    { "type": "wokwi-resistor", "id": "r5",  "top":  -25, "left": 320, "attrs": { "value": "220" } },
+    { "type": "wokwi-resistor", "id": "r6",  "top":   35, "left": 320, "attrs": { "value": "220" } },
+    { "type": "wokwi-resistor", "id": "r7",  "top":   95, "left": 320, "attrs": { "value": "220" } },
+    { "type": "wokwi-resistor", "id": "r8",  "top":  155, "left": 320, "attrs": { "value": "220" } },
+    { "type": "wokwi-resistor", "id": "r9",  "top":  245, "left": 320, "attrs": { "value": "220" } },
+    { "type": "wokwi-resistor", "id": "r10", "top":  305, "left": 320, "attrs": { "value": "220" } },
+    { "type": "wokwi-resistor", "id": "r11", "top":  365, "left": 320, "attrs": { "value": "220" } },
+
+    { "type": "wokwi-text", "id": "t1", "top": -345, "left": -360,
+      "attrs": { "text": "SONAR FRENTE  TRIG=5 ECHO=18        SONAR TRAS  TRIG=4 ECHO=16", "fontSize": "15" } },
+    { "type": "wokwi-text", "id": "t2", "top": -60, "left": -360,
+      "attrs": { "text": "LDR de linha: FRENTE=34  TRAS=35  (escuro = em cima da linha)", "fontSize": "15" } },
+    { "type": "wokwi-text", "id": "t3", "top": -350, "left": 320,
+      "attrs": { "text": "Ponte H (12/13/14/15)", "fontSize": "15" } }
+  ],
+
+  "connections": [
+    [ "esp:TX", "$serialMonitor:RX", "", [] ],
+    [ "esp:RX", "$serialMonitor:TX", "", [] ],
+
+    [ "esp:3V3",     "sonarF:VCC",  "red",   [] ],
+    [ "sonarF:GND",  "esp:GND.1",   "black", [] ],
+    [ "esp:5",       "sonarF:TRIG", "green", [] ],
+    [ "sonarF:ECHO", "esp:18",      "blue",  [] ],
+
+    [ "esp:3V3",     "sonarT:VCC",  "red",   [] ],
+    [ "sonarT:GND",  "esp:GND.1",   "black", [] ],
+    [ "esp:4",       "sonarT:TRIG", "green", [] ],
+    [ "sonarT:ECHO", "esp:16",      "blue",  [] ],
+
+    [ "esp:3V3",    "ldrF:VCC", "red",    [] ],
+    [ "ldrF:GND",   "esp:GND.1","black",  [] ],
+    [ "ldrF:DO",    "esp:34",   "violet", [] ],
+
+    [ "esp:3V3",    "ldrT:VCC", "red",    [] ],
+    [ "ldrT:GND",   "esp:GND.1","black",  [] ],
+    [ "ldrT:DO",    "esp:35",   "violet", [] ],
+
+    [ "esp:3V3",  "btn:1.l", "red",    [] ],
+    [ "btn:2.l",  "esp:32",  "purple", [] ],
+
+    [ "esp:33", "r1:1",  "green",  [] ], [ "r1:2",  "mEF:A", "green",  [] ], [ "mEF:C", "esp:GND.2", "black", [] ],
+    [ "esp:13", "r2:1",  "red",    [] ], [ "r2:2",  "mET:A", "red",    [] ], [ "mET:C", "esp:GND.2", "black", [] ],
+    [ "esp:14", "r3:1",  "green",  [] ], [ "r3:2",  "mDF:A", "green",  [] ], [ "mDF:C", "esp:GND.2", "black", [] ],
+    [ "esp:15", "r4:1",  "red",    [] ], [ "r4:2",  "mDT:A", "red",    [] ], [ "mDT:C", "esp:GND.2", "black", [] ],
+
+    [ "esp:19", "r5:1",  "yellow", [] ], [ "r5:2",  "lF:A",  "yellow", [] ], [ "lF:C",  "esp:GND.3", "black", [] ],
+    [ "esp:21", "r6:1",  "yellow", [] ], [ "r6:2",  "lT:A",  "yellow", [] ], [ "lT:C",  "esp:GND.3", "black", [] ],
+    [ "esp:22", "r7:1",  "gray",   [] ], [ "r7:2",  "lD:A",  "gray",   [] ], [ "lD:C",  "esp:GND.3", "black", [] ],
+    [ "esp:23", "r8:1",  "gray",   [] ], [ "r8:2",  "lE:A",  "gray",   [] ], [ "lE:C",  "esp:GND.3", "black", [] ],
+
+    [ "esp:25", "r9:1",  "red",    [] ], [ "r9:2",  "dV:A",  "red",    [] ], [ "dV:C",  "esp:GND.3", "black", [] ],
+    [ "esp:26", "r10:1", "blue",   [] ], [ "r10:2", "dA:A",  "blue",   [] ], [ "dA:C",  "esp:GND.3", "black", [] ],
+    [ "esp:27", "r11:1", "orange", [] ], [ "r11:2", "dL:A",  "orange", [] ], [ "dL:C",  "esp:GND.3", "black", [] ]
+  ],
+
+  "dependencies": {}
+}
