@@ -102,9 +102,28 @@
 // =============================================================================
 
 // ---- Sensores de linha ------------------------------------------------------
-#define LINHA_NIVEL_ATIVO      1   // nivel do DO quando o sensor esta na linha
+// Nivel do DO quando o sensor esta sobre a linha.
+//
+// Medido no modulo real em 23/10: tapado (escuro) o DO vai para 1, exposto
+// (claro) vai para 0. Portanto MAIS LUZ = 0. Como a borda da arena e uma
+// linha BRANCA, que reflete mais luz que o piso preto, "estou na linha"
+// corresponde a 0.
+//
+// O valor 1 que estava aqui antes veio da calibracao no simulador Wokwi, cujo
+// modulo LDR responde ao contrario do modulo fisico.
+#define LINHA_NIVEL_ATIVO      0
 #define T_AMOSTRA_LINHA_MS     5   // periodo da tarefa de linha
 #define DEBOUNCE_LINHA         2   // leituras iguais seguidas para validar
+
+// Permite rodar com um sensor de linha so. Um LDR desligado ou queimado deixa o
+// pino flutuando, e pino flutuante tende a ler 1 - que o codigo entende como
+// "estou na borda". O robo entao fica preso em evasao para sempre.
+// Ponha 0 no sensor que nao existe ainda e ele passa a ser ignorado.
+//
+// ATENCAO: com um sensor desligado o robo perde a protecao de borda daquele
+// lado. Serve para bancada; antes da competicao os dois precisam estar em 1.
+#define USAR_LDR_FRENTE        1
+#define USAR_LDR_TRAS          0
 
 // ---- Ultrassonicos ----------------------------------------------------------
 // T_PING_MS e o intervalo entre disparos ALTERNADOS: cada sensor e lido a cada
@@ -303,8 +322,15 @@ static void linha_task(void *arg)
     uint8_t  cnt[2]   = { 0, 0 };
     int64_t  desde[2] = { -1, -1 };
 
+    const bool habilitado[2] = { USAR_LDR_FRENTE, USAR_LDR_TRAS };
+
     while (true) {
         for (int i = 0; i < 2; i++) {
+            if (!habilitado[i]) {        // sensor desligado: nunca acusa linha
+                est[i]   = false;
+                desde[i] = -1;
+                continue;
+            }
             bool bruto = (gpio_get_level(pino[i]) == LINHA_NIVEL_ATIVO);
             if (bruto != est[i]) {
                 if (++cnt[i] >= DEBOUNCE_LINHA) {
@@ -321,6 +347,20 @@ static void linha_task(void *arg)
         g_linha.frente = est[0];  g_linha.frente_desde = desde[0];
         g_linha.tras   = est[1];  g_linha.tras_desde   = desde[1];
         portEXIT_CRITICAL(&g_lock);
+
+        // DIAGNOSTICO: imprime o nivel CRU dos pinos uma vez por segundo.
+        // Fica aqui dentro da tarefa de linha de proposito - ela nunca bloqueia,
+        // entao a leitura aparece mesmo quando o laco principal esta preso numa
+        // manobra de evasao. Tape o sensor com a mao: se o numero nao mudar, o
+        // problema e o potenciometro do modulo, nao o codigo.
+        static int64_t t_dbg = 0;
+        if (now_ms() - t_dbg > 1000) {
+            printf("LDR cru: G%d=%d  G%d=%d   (conta como linha quando vale %d)\n",
+                   PINO_LDR_FRENTE, gpio_get_level(PINO_LDR_FRENTE),
+                   PINO_LDR_TRAS,   gpio_get_level(PINO_LDR_TRAS),
+                   LINHA_NIVEL_ATIVO);
+            t_dbg = now_ms();
+        }
 
         delay_ms(T_AMOSTRA_LINHA_MS);
     }
