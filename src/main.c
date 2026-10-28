@@ -311,6 +311,53 @@ static void aplicar(mov_t m, int vel)
 static void parar_motores(void) { aplicar(MOV_PARADO, 0); }
 
 // =============================================================================
+// AUTOTESTE DOS LEDS
+// =============================================================================
+// Acende os sete LEDs em sequencia, 300 ms cada, logo apos o boot.
+//
+// Serve para conferir antes de cada luta que nenhum indicador esta queimado,
+// com fio solto ou no furo errado. Como o nome de cada LED sai no serial junto
+// com o acendimento, da para identificar na hora qual nao respondeu.
+//
+// Os LEDs de movimento so acendem durante manobras especificas, e alguns
+// (como o de re) podem demorar muito para aparecer sozinhos - este teste
+// exercita todos de uma vez, sem depender do que o robo resolver fazer.
+
+static void autoteste_leds(void)
+{
+    const gpio_num_t pinos[] = {
+        LED_FRENTE, LED_TRAS, LED_DIREITA, LED_ESQUERDA,
+        LED_DIST_VERMELHO, LED_DIST_AZUL, LED_DIST_LARANJA
+    };
+    const char *nomes[] = {
+        "FRENTE (G19)", "TRAS (G21)", "DIREITA (G22)", "ESQUERDA (G23)",
+        "DIST <10 (G25)", "DIST 10-30 (G26)", "DIST 30-60 (G27)"
+    };
+    const int n = sizeof(pinos) / sizeof(pinos[0]);
+
+    printf("\n--- autoteste de LEDs ---\n");
+
+    for (int i = 0; i < n; i++) gpio_set_level(pinos[i], 0);
+
+    for (int i = 0; i < n; i++) {
+        printf("  %d/%d  %s\n", i + 1, n, nomes[i]);
+        gpio_set_level(pinos[i], 1);
+        delay_ms(300);
+        gpio_set_level(pinos[i], 0);
+    }
+
+    // Pisca os sete juntos duas vezes para fechar.
+    for (int k = 0; k < 2; k++) {
+        for (int i = 0; i < n; i++) gpio_set_level(pinos[i], 1);
+        delay_ms(200);
+        for (int i = 0; i < n; i++) gpio_set_level(pinos[i], 0);
+        delay_ms(200);
+    }
+
+    printf("--- fim do autoteste ---\n\n");
+}
+
+// =============================================================================
 // 5. SENSORES DE LINHA (tarefa de prioridade maxima)
 // =============================================================================
 
@@ -355,10 +402,11 @@ static void linha_task(void *arg)
         // problema e o potenciometro do modulo, nao o codigo.
         static int64_t t_dbg = 0;
         if (now_ms() - t_dbg > 1000) {
-            printf("LDR cru: G%d=%d  G%d=%d   (conta como linha quando vale %d)\n",
+            printf("LDR cru: G%d=%d  G%d=%d  (linha quando vale %d)   BOTAO G%d=%d\n",
                    PINO_LDR_FRENTE, gpio_get_level(PINO_LDR_FRENTE),
                    PINO_LDR_TRAS,   gpio_get_level(PINO_LDR_TRAS),
-                   LINHA_NIVEL_ATIVO);
+                   LINHA_NIVEL_ATIVO,
+                   PINO_BOTAO,      gpio_get_level(PINO_BOTAO));
             t_dbg = now_ms();
         }
 
@@ -448,6 +496,17 @@ static void sonar_task(void *arg)
         s->dist = filtrada;
         s->seq++;
         portEXIT_CRITICAL(&g_lock);
+
+        // DIAGNOSTICO: a telemetria de sonar do laco principal so aparece
+        // depois que o botao arma o robo. Esta linha sai sempre, inclusive em
+        // espera, para dar para conferir a fiacao antes do botao existir.
+        // DIST_FALHA (-1) = modulo mudo; 400 = nada dentro do alcance.
+        static int64_t t_dbg = 0;
+        if (now_ms() - t_dbg > 1000) {
+            printf("sonar cru: FRENTE=%ld cm  TRAS=%ld cm\n",
+                   g_sonar[S_FRENTE].dist, g_sonar[S_TRAS].dist);
+            t_dbg = now_ms();
+        }
 
         k = (k + 1) % N_SONARES;
         delay_ms(T_PING_MS);
@@ -696,11 +755,25 @@ static void armar_robo(void)
 // Debounce por estabilidade. Cada borda de subida alterna ligado/desligado.
 static void tratar_botao(void)
 {
-    static bool    estavel    = false;
-    static bool    ultimo_raw = false;
+    static bool    inicializado = false;
+    static bool    estavel;
+    static bool    ultimo_raw;
     static int64_t t_mudanca  = 0;
 
     bool raw = (gpio_get_level(PINO_BOTAO) == 1);
+
+    // Na primeira chamada, adota o nivel ATUAL do pino como estado de partida.
+    // Sem isto o codigo assumia "solto" no boot, e um pino que ja estivesse em
+    // 1 nesse instante - botao segurado, preso ou travado por defeito - era
+    // lido como um aperto e o robo armava sozinho ao ligar. Com motores no
+    // lugar isso significa o robo sair andando logo apos um reset.
+    if (!inicializado) {
+        estavel      = raw;
+        ultimo_raw   = raw;
+        t_mudanca    = now_ms();
+        inicializado = true;
+        return;
+    }
 
     if (raw != ultimo_raw) {
         ultimo_raw = raw;
@@ -817,6 +890,7 @@ void app_main(void)
     printf("=================================================\n");
 
     configurar_hardware();
+    autoteste_leds();
 
     // A linha tem prioridade MAIOR que o sonar: sair da arena e derrota certa.
     xTaskCreate(linha_task, "linha", 2560, NULL, 8, NULL);
