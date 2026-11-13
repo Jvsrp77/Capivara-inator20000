@@ -165,6 +165,21 @@
 // ---- PWM --------------------------------------------------------------------
 // 1 kHz e confortavel para L298N. TB6612 aceita bem mais.
 #define PWM_FREQ            1000
+
+// TETO DE DUTY - protecao dos motores
+//
+// A bateria e de 3x 18650 em serie: 11,1 V nominais, 12,6 V carregada.
+// Os motores TT amarelos sao especificados para 3 a 6 V. Ligados direto
+// nesse barramento eles queimam em pouco tempo.
+//
+// Limitando o duty, a tensao MEDIA que chega ao motor cai na proporcao:
+//     V_media = V_bateria * DUTY_MAX_PCT / 100
+// Com 65% sobre 11,1 V, da cerca de 7,2 V - acima do nominal, que e o que
+// se quer em sumo por causa do torque, mas longe de queimar.
+//
+// SE TROCAR A BATERIA, REFACA ESSA CONTA. Com um pacote de 7,4 V, por
+// exemplo, o teto poderia subir para 90%.
+#define DUTY_MAX_PCT          65
 #define PWM_MODE   LEDC_LOW_SPEED_MODE
 #define PWM_TIMER  LEDC_TIMER_0
 #define PWM_RES    LEDC_TIMER_8_BIT
@@ -259,6 +274,11 @@ static void pwm_set(ledc_channel_t ch, int pct)
 {
     if (pct < 0)   pct = 0;
     if (pct > 100) pct = 100;
+
+    // Unico ponto por onde passa todo duty de motor - o teto fica aqui para
+    // nao haver caminho que escape dele.
+    pct = (pct * DUTY_MAX_PCT) / 100;
+
     ledc_set_duty(PWM_MODE, ch, (pct * 255) / 100);
     ledc_update_duty(PWM_MODE, ch);
 }
@@ -355,6 +375,61 @@ static void autoteste_leds(void)
     }
 
     printf("--- fim do autoteste ---\n\n");
+}
+
+// =============================================================================
+// TESTE DE MOTORES
+// =============================================================================
+// Entra aqui quando o botao esta pressionado no instante do boot.
+//
+// Aciona um motor de cada vez, nos dois sentidos, anunciando cada etapa no
+// serial. Com as RODAS NO AR, serve para conferir se cada roda gira no sentido
+// certo. Se alguma estiver invertida, basta trocar os dois fios dela no borne
+// da ponte H - nao se mexe no codigo.
+//
+// Sem este teste, sentido invertido so aparece com o robo no chao, saindo
+// correndo para o lado oposto do esperado.
+//
+// A funcao NAO RETORNA: trava no fim com os motores parados, de proposito.
+// Para voltar ao modo normal, reinicie sem segurar o botao.
+
+#define VEL_TESTE   60
+
+static void teste_motores(void)
+{
+    static const struct { int esq; int dir; const char *desc; } passo[] = {
+        {  VEL_TESTE,          0, "motor ESQUERDO para FRENTE" },
+        { -VEL_TESTE,          0, "motor ESQUERDO para TRAS"   },
+        {          0,  VEL_TESTE, "motor DIREITO  para FRENTE" },
+        {          0, -VEL_TESTE, "motor DIREITO  para TRAS"   },
+        {  VEL_TESTE,  VEL_TESTE, "os DOIS para FRENTE"        },
+        { -VEL_TESTE, -VEL_TESTE, "os DOIS para TRAS"          },
+        {  VEL_TESTE, -VEL_TESTE, "giro para a DIREITA"        },
+        { -VEL_TESTE,  VEL_TESTE, "giro para a ESQUERDA"       },
+    };
+    const int n = sizeof(passo) / sizeof(passo[0]);
+
+    printf("\n=========== MODO TESTE DE MOTORES ===========\n");
+    printf(" Mantenha as RODAS NO AR. Comecando em 2 s.\n");
+    printf("=============================================\n\n");
+    delay_ms(2000);
+
+    for (int i = 0; i < n; i++) {
+        printf("  %d/%d  %s\n", i + 1, n, passo[i].desc);
+        motores(passo[i].esq, passo[i].dir);
+        delay_ms(1200);
+        motores(0, 0);
+        delay_ms(600);
+    }
+
+    printf("\n=== fim do teste - motores parados ===\n");
+    printf("Roda girando ao contrario? Inverta os dois fios dela no borne.\n");
+    printf("Reinicie SEM segurar o botao para voltar ao modo normal.\n\n");
+
+    while (true) {
+        motores(0, 0);
+        delay_ms(500);
+    }
 }
 
 // =============================================================================
@@ -890,6 +965,12 @@ void app_main(void)
     printf("=================================================\n");
 
     configurar_hardware();
+    // Botao pressionado no boot -> modo de teste de motores (nao retorna).
+    // Fica antes do autoteste de LEDs para voce nao precisar segurar 3 s.
+    if (gpio_get_level(PINO_BOTAO) == 1) {
+        teste_motores();
+    }
+
     autoteste_leds();
 
     // A linha tem prioridade MAIOR que o sonar: sair da arena e derrota certa.
