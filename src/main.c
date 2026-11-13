@@ -123,7 +123,7 @@
 // ATENCAO: com um sensor desligado o robo perde a protecao de borda daquele
 // lado. Serve para bancada; antes da competicao os dois precisam estar em 1.
 #define USAR_LDR_FRENTE        1
-#define USAR_LDR_TRAS          0
+#define USAR_LDR_TRAS          1
 
 // ---- Ultrassonicos ----------------------------------------------------------
 // T_PING_MS e o intervalo entre disparos ALTERNADOS: cada sensor e lido a cada
