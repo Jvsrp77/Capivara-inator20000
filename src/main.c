@@ -231,7 +231,7 @@ typedef struct {
 static linha_t      g_linha = { false, false, -1, -1 };
 static portMUX_TYPE g_lock  = portMUX_INITIALIZER_UNLOCKED;
 
-static bool  g_robo_ativo    = false;
+static volatile bool g_robo_ativo = false;
 static bool  g_inicio_feito  = false;
 static mov_t g_ultimo_lado   = MOV_DIREITA;   // memoria de posicao
 
@@ -642,6 +642,7 @@ static bool executar(mov_t m, int vel, int ms, bool abortar_na_linha)
 
     while ((now_ms() - t0) < ms) {
         atualizar_leds_distancia();
+        if (!g_robo_ativo) return false;
         if (abortar_na_linha && alguma_linha()) return false;
         delay_ms(T_CONTROLE_MS);
     }
@@ -689,6 +690,7 @@ static bool sair_da_linha(mov_t m, int vel, bool olhar_frente)
     int64_t t0 = now_ms();
 
     while (olhar_frente ? linha_frente() : linha_tras()) {
+        if (!g_robo_ativo) { parar_motores(); return false; }
         int64_t dt = now_ms() - t0;
 
         if (dt > T_EMPURRADO_MS) {          // timer de seguranca
@@ -743,6 +745,7 @@ static void evasao_ambos(void)
 
     int64_t t0 = now_ms();
     while (linha_frente() && linha_tras()) {
+        if (!g_robo_ativo) { parar_motores(); return; }
         if ((now_ms() - t0) > T_MAX_EMERGENCIA) {
             printf("  [AVISO] emergencia estourou %d ms\n", T_MAX_EMERGENCIA);
             break;
@@ -874,6 +877,25 @@ static void tratar_botao(void)
 // 13. CONFIGURACAO DE HARDWARE
 // =============================================================================
 
+// Tarefa dedicada so para o botao.
+//
+// Antes o tratar_botao() era chamado uma vez por volta do loop principal, e as
+// manobras de evasao bloqueiam esse loop por centenas de ms. Com um sensor de
+// linha travado o robo vivia dentro da evasao, o botao era amostrado uma vez a
+// cada 750 ms e qualquer aperto curto caia no vao entre duas leituras: nao
+// havia como desarmar. Um botao de parada que falha nao e botao de parada.
+//
+// Em tarefa propria ele e lido a cada 10 ms, independente do que o resto faz.
+// Prioridade 9, acima da linha_task, porque parar e mais urgente que decidir.
+static void botao_task(void *arg)
+{
+    (void)arg;
+    while (true) {
+        tratar_botao();
+        delay_ms(10);
+    }
+}
+
 static void configurar_hardware(void)
 {
     // ---- Saidas digitais (TRIGs e LEDs) ----
@@ -976,11 +998,11 @@ void app_main(void)
     // A linha tem prioridade MAIOR que o sonar: sair da arena e derrota certa.
     xTaskCreate(linha_task, "linha", 2560, NULL, 8, NULL);
     xTaskCreate(sonar_task, "sonar", 3072, NULL, 6, NULL);
+    xTaskCreate(botao_task, "botao", 2048, NULL, 9, NULL);
 
     int64_t t_log = 0;
 
     while (true) {
-        tratar_botao();
         atualizar_leds_distancia();
 
         // ---------------- Parado, esperando o botao ----------------
